@@ -7,7 +7,7 @@
 - **Nur einphasig getestet.** Alles hier wurde ausschließlich im einphasigen Betrieb (6–32 A) entwickelt und getestet. Eine Phasenumschaltung (1↔3-phasig) wird vom Skript nicht unterstützt und wurde nicht getestet. Wer dreiphasig lädt, muss Stromgrenzen, PWM-Berechnung und die evcc-Phaseneinstellung selbst anpassen und prüfen.
 - **Workaround ohne Gewähr, ohne Support.** Dies ist ein privat erarbeiteter Workaround für eine seit Jahren nicht mehr offiziell unterstützte Hardware-Kombination. Bereitstellung „wie besehen“ (as-is), ohne Garantie auf Funktion, Sicherheit oder Vollständigkeit und ohne Zusage auf laufende Unterstützung. Nutzung auf eigene Verantwortung. Es geht um eine 230-V-Ladeanwendung; Arbeiten an der Installation gehören in die Hand einer Elektrofachkraft.
 - **Getestet:** Mit der aktuellen Skriptversion funktionieren in evcc „Smart“ (mit und ohne „Dauerhaft laden“), „Aus“ und „Schnell“. Beim Anstecken bleibt die Box gesperrt, bis evcc sie freigibt. Einzelheiten im Abschnitt „Empfohlener Betrieb“.
-- Diese Doku soll dir Wochen an Fehlersuche ersparen. Sie ersetzt nicht das eigene Verständnis der Hardware. Für dieses Modul ist ein nativer evcc-Treiber in Arbeit (offener Pull Request #33644 im evcc-Repository, Stand Oktober 2026). Sobald er in einer evcc-Version enthalten ist, ist er dieser Bridge vorzuziehen.
+- Diese Doku soll dir Wochen an Fehlersuche ersparen. Sie ersetzt nicht das eigene Verständnis der Hardware. Für dieses Modul ist ein nativer evcc-Treiber in Arbeit (offener Pull Request #33644 im evcc-Repository, Stand November 2026). Sobald er in einer evcc-Version enthalten ist, ist er dieser Bridge vorzuziehen.
 
 ## Getestete Umgebung
 
@@ -36,7 +36,7 @@ evcc (Raspberry Pi)
                                           └─ RS485 (A/B/M) ──> ABL-EVCC-Modul in der Wallbox
 ```
 
-evcc ruft das Skript pro Aktion kurz auf (`status`, `enabled`, `enable`, `maxcurrent`). Das Skript baut den ABL-Befehl, schickt ihn per TCP, liest die Antwort und gibt das Ergebnis auf stdout aus. Es soll bewusst nur ein Übersetzer bleiben und keine eigene Ladelogik enthalten.
+evcc ruft das Skript pro Aktion kurz auf (`status`, `enabled`, `enable`, `maxcurrent`). Das Skript baut den ABL-Befehl, schickt ihn per TCP, liest die Antwort und gibt das Ergebnis auf stdout aus. Es soll möglichst schlank bleiben, enthält aber einige Ausgleiche für Eigenheiten des Moduls (siehe „Verhalten des Skripts“).
 
 **Wichtig: Es darf nur einen RS485-Master geben.** Der Bus verträgt nur einen Sender. War die Box vorher an einem Datenlogger angeschlossen, muss dieser vom Bus getrennt sein.
 
@@ -69,9 +69,9 @@ Erster Test (Firmware abfragen):
 ```
 printf '!1 01\r\n' | nc 192.168.1.91 552
 >1 01 V2.3
+^C
 ```
-
-Mit `nc -q1` beendet sich `nc` nach der Antwort von selbst, wenn die nc-Variante das unterstützt. Sonst mit Strg+C abbrechen oder (printf '!1 01\\r\\n'; sleep 1) | nc 192.168.1.91 552 verwenden.
+Nach der Antwort, hier >1 01 V2.3, mit Strg+C abbrechen um auf den Prompt zurückzukehren.
 
 ## Das Protokoll in Kürze
 
@@ -206,9 +206,11 @@ Ohne das Flag bot das Modul einem neu angesteckten Fahrzeug den zuletzt gesetzte
 
 - **evcc-Warnung `charger logic error: disabled but charging` bzw. `charger out of sync`.** Sie trat mit der reinen PWM-Sperre bei jeder Pause auf, weil das Modul nach dem Sperren noch minutenlang C meldete. Mit der aktuellen Skriptversion meldet das Skript dieses hängende C als B, die Warnung und das Pendeln entfallen (in den Tests vom 11.11. keine Warnung). Bei älteren Skriptversionen oder mit `REPORT_LOCKED_C_AS_B = False` kann sie weiter auftreten.
 - **Tesla-App: „Kommunikation mit Ladeausrüstung abgebrochen“** beim harten Unterbrechen der Ladung (z. B. Wechsel nach Zustand A'). Beobachtet, harmlos.
-- **Tesla-App zeigt „Wird geladen“ bei 0/0 A**, obwohl nichts fließt. Das ist die Darstellung der App, solange das Modul Zustand C meldet.
+- **Tesla-App zeigt „Wird geladen“ bei 0/0 A, evcc „Verbunden“ mit etwa 8 W**. Wird während der Ladung gesperrt (zu wenig Überschuss, „Aus“ oder „Stop“), bleibt das Fahrzeug im Zustand C mit 0 A. Es beendet die Sitzung nicht von selbst. Erst „Ladevorgang stoppen“ in der Fahrzeug-App oder das Abstecken beendet sie.
 - **`ERR` in Antworten** wurde beim manuellen Testen während laufender evcc-Abfragen beobachtet (siehe Hinweis zu mehreren TCP-Clients). Das Skript wertet es nicht aus.
 - **Renault Zoe Q210 (Erfahrungswert des Autors ab 2013, mit diesem Skript nicht getestet):** Dieses Fahrzeug startet die Ladung erst ab etwa 8 A einphasig bzw. 13 A dreiphasig. Wer so ein Fahrzeug hat, stellt in evcc den Mindeststrom entsprechend höher ein.
+Zur Sperre per bBreakCharge-Flag: Eine Zoe wachte 2014 nach dem Löschen des Flags nicht von selbst wieder auf, erst die Folge !1 30 / !1 31 brachte sie zum Laden. Der Tesla startet nach dem Löschen von selbst. Wie sich andere Fahrzeuge verhalten, ist ungeklärt. 
+ 
 - **Feine Stromschritte** gibt es nur mit `maxcurrentmillis` (siehe evcc-Konfiguration).
 
 ## Sackgassen – das musst du nicht nochmal probieren
